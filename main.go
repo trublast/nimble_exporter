@@ -110,6 +110,8 @@ func processRequest(w http.ResponseWriter, r *http.Request) {
 		var result SrtSenders
 		if err := json.Unmarshal([]byte(resp), &result); err != nil {
 			log.Errorf("Can not unmarshal JSON from /manage/srt_sender_stats")
+			w.WriteHeader(503)
+			return
 		} else {
 			for _, rec := range result.SrtSenders {
 				fmt.Fprintf(w, "nimble_srt_sender_time { stream_id=\"%s\", id=\"%s\"} %d\n", rec.Streamid, rec.ID, rec.Stats.Time)
@@ -132,12 +134,17 @@ func processRequest(w http.ResponseWriter, r *http.Request) {
 				fmt.Fprintf(w, "nimble_srt_sender_recv_mbps_rate { stream_id=\"%s\", id=\"%s\"} %f\n", rec.Streamid, rec.ID, rec.Stats.Recv.MbpsRate)
 			}
 		}
+	} else {
+		w.WriteHeader(503)
+		return
 	}
 	resp, err = getMetrics("/manage/srt_receiver_stats")
 	if err == nil {
 		var result SrtReceivers
 		if err := json.Unmarshal([]byte(resp), &result); err != nil {
 			log.Errorf("Can not unmarshal JSON from /manage/srt_receiver_stats")
+			w.WriteHeader(503)
+			return
 		} else {
 			for _, rec := range result.SrtReceivers {
 				fmt.Fprintf(w, "nimble_srt_receiver_time { stream_id=\"%s\", id=\"%s\"} %d\n", rec.Streamid, rec.ID, rec.Stats.Time)
@@ -160,6 +167,9 @@ func processRequest(w http.ResponseWriter, r *http.Request) {
 				fmt.Fprintf(w, "nimble_srt_receiver_recv_mbps_rate { stream_id=\"%s\", id=\"%s\"} %f\n", rec.Streamid, rec.ID, rec.Stats.Recv.MbpsRate)
 			}
 		}
+	} else {
+		w.WriteHeader(503)
+		return
 	}
 	// server_status
 	resp, err = getMetrics("/manage/server_status")
@@ -167,6 +177,8 @@ func processRequest(w http.ResponseWriter, r *http.Request) {
 		var result ServerStatus
 		if err := json.Unmarshal([]byte(resp), &result); err != nil {
 			log.Errorf("Can not unmarshal JSON from /manage/server_status")
+			w.WriteHeader(503)
+			return
 		} else {
 			fmt.Fprintf(w, "nimble_connections %d\n", result.Connections)
 			fmt.Fprintf(w, "nimble_outrate %d\n", result.OutRate)
@@ -181,6 +193,9 @@ func processRequest(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "nimble_sysinfo_tsss %d\n", result.SysInfo.Tsss)
 			fmt.Fprintf(w, "nimble_sysinfo_fsss %d\n", result.SysInfo.Fsss)
 		}
+	} else {
+		w.WriteHeader(503)
+		return
 	}
 }
 
@@ -205,7 +220,6 @@ func getMetrics(path string) (string, error) {
 		return "", errors.New("cant get metrics")
 	}
 	body, _ := io.ReadAll(resp.Body)
-	//fmt.Printf("client: response body: %s\n", body)
 	return string(body), nil
 }
 
@@ -218,7 +232,8 @@ func main() {
 		log.SetFormatter(&log.JSONFormatter{})
 	}
 
-	http.HandleFunc("/", processRequest)
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) })
+	http.HandleFunc("/metrics", processRequest)
 
 	http.ListenAndServe(*ListenAddress, nil)
 }
